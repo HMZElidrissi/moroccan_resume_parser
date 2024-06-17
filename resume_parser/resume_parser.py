@@ -53,9 +53,11 @@ class ResumeParser(object):
             self.__details['measurable_results'] = []
         return
 
+
 def resume_result_wrapper(resume):
         parser = ResumeParser(resume)
         return parser.get_extracted_data()
+
 
 if __name__ == '__main__':
     pool = mp.Pool(mp.cpu_count())

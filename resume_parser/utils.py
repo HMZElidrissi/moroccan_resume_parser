@@ -26,7 +26,7 @@ def extract_text_from_pdf(pdf_path):
     '''
     # https://www.blog.pythonlibrary.org/2018/05/03/exporting-data-from-pdfs-with-python/
     with open(pdf_path, 'rb') as fh:
-        for page in PDFPage.get_pages(fh, 
+        for page in PDFPage.get_pages(fh,
                                       caching=True,
                                       check_extractable=True):
             resource_manager = PDFResourceManager()
@@ -34,13 +34,14 @@ def extract_text_from_pdf(pdf_path):
             converter = TextConverter(resource_manager, fake_file_handle, codec='utf-8', laparams=LAParams())
             page_interpreter = PDFPageInterpreter(resource_manager, converter)
             page_interpreter.process_page(page)
- 
+
             text = fake_file_handle.getvalue()
             yield text
- 
+
             # close open handles
             converter.close()
             fake_file_handle.close()
+
 
 def extract_text_from_doc(doc_path):
     '''
@@ -52,6 +53,7 @@ def extract_text_from_doc(doc_path):
     temp = docx2txt.process(doc_path)
     text = [line.replace('\t', ' ') for line in temp.split('\n') if line]
     return ' '.join(text)
+
 
 def extract_text(file_path, extension):
     '''
@@ -67,6 +69,7 @@ def extract_text(file_path, extension):
     elif extension == '.docx' or extension == '.doc':
         text = extract_text_from_doc(file_path)
     return text
+
 
 def extract_entity_sections(text):
     '''
@@ -93,7 +96,7 @@ def extract_entity_sections(text):
             key = p_key
         elif key and phrase.strip():
             entities[key].append(phrase)
-    
+
     # entity_key = False
     # for entity in entities.keys():
     #     sub_entities = {}
@@ -110,8 +113,9 @@ def extract_entity_sections(text):
     # make entities that are not found None
     # for entity in cs.RESUME_SECTIONS:
     #     if entity not in entities.keys():
-    #         entities[entity] = None 
+    #         entities[entity] = None
     return entities
+
 
 def extract_email(text):
     '''
@@ -126,6 +130,7 @@ def extract_email(text):
         except IndexError:
             return None
 
+
 def extract_name(nlp_text, matcher):
     '''
     Helper function to extract name from spacy nlp text
@@ -135,14 +140,15 @@ def extract_name(nlp_text, matcher):
     :return: string of full name
     '''
     pattern = [cs.NAME_PATTERN]
-    
+
     matcher.add('NAME', None, *pattern)
-    
+
     matches = matcher(nlp_text)
-    
+
     for match_id, start, end in matches:
         span = nlp_text[start:end]
         return span.text
+
 
 def extract_mobile_number(text):
     '''
@@ -152,15 +158,16 @@ def extract_mobile_number(text):
     :return: string of extracted mobile numbers
     '''
     # Found this complicated regex on : https://zapier.com/blog/extract-links-email-phone-regex/
-    # phone = re.findall(re.compile(r'(?:(?:\+?([1-9]|[0-9][0-9]|[0-9][0-9][0-9])\s*(?:[.-]\s*)?)?(?:\(\s*([2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|([0-9][1-9]|[0-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?([2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?([0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(\d+))?'), text)
-    mob_num_regex = r'^(\+212|0)([\s.-]?)(6|7)([\s.-]?\d{2}){4}$'
-    phone = re.findall(re.compile(mob_num_regex), text)
+    phone = re.findall(re.compile(r'(?:(?:\+?([1-9]|[0-9][0-9]|[0-9][0-9][0-9])\s*(?:[.-]\s*)?)?(?:\(\s*([2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|([0-9][1-9]|[0-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?([2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?([0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(\d+))?'), text)
+    # mob_num_regex = r'^(\+212|0)([\s.-]?)(6|7)([\s.-]?\d{2}){4}$'
+    # phone = re.findall(re.compile(mob_num_regex), text)
     if phone:
         number = ''.join(phone[0])
         if len(number) > 10:
             return '+' + number
         else:
             return number
+
 
 def extract_skills(nlp_text, noun_chunks):
     '''
@@ -171,14 +178,14 @@ def extract_skills(nlp_text, noun_chunks):
     :return: list of skills extracted
     '''
     tokens = [token.text for token in nlp_text if not token.is_stop]
-    data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'skills.csv')) 
+    data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'skills.csv'))
     skills = list(data.columns.values)
     skillset = []
     # check for one-grams
     for token in tokens:
         if token.lower() in skills:
             skillset.append(token)
-    
+
     # check for bi-grams and tri-grams
     for token in noun_chunks:
         token = token.text.lower().strip()
@@ -186,36 +193,12 @@ def extract_skills(nlp_text, noun_chunks):
             skillset.append(token)
     return [i.capitalize() for i in set([i.lower() for i in skillset])]
 
-def cleanup(token, lower = True):
+
+def cleanup(token, lower=True):
     if lower:
-       token = token.lower()
+        token = token.lower()
     return token.strip()
 
-
-def extract_education(nlp_text):
-    '''
-    Helper function to extract education from spacy nlp text
-
-    :param nlp_text: object of `spacy.tokens.doc.Doc`
-    :return: tuple of education degree and year if year if found else only returns education degree
-    '''
-    edu = {}
-    # Extract education degree
-    for index, text in enumerate(nlp_text):
-        for tex in text.split():
-            tex = re.sub(r'[?|$|.|!|,]', r'', tex)
-            if tex.upper() in cs.EDUCATION and tex not in cs.STOPWORDS:
-                edu[tex] = text + nlp_text[index + 1]
-
-    # Extract year
-    education = []
-    for key in edu.keys():
-        year = re.search(re.compile(cs.YEAR), edu[key])
-        if year:
-            education.append((key, ''.join(year.group(0))))
-        else:
-            education.append(key)
-    return education
 
 def extract_education_keywords(nlp_text):
     edu_keywords = []
@@ -243,7 +226,8 @@ def extract_experience(resume_text):
     word_tokens = nltk.word_tokenize(resume_text)
 
     # remove stop words and lemmatize
-    filtered_sentence = [w for w in word_tokens if not w in stop_words and wordnet_lemmatizer.lemmatize(w) not in stop_words]
+    filtered_sentence = [w for w in word_tokens if
+                         not w in stop_words and wordnet_lemmatizer.lemmatize(w) not in stop_words]
     sent = nltk.pos_tag(filtered_sentence)
 
     # parse regex
@@ -255,12 +239,13 @@ def extract_experience(resume_text):
 
     test = []
 
-    for vp in list(cs.subtrees(filter=lambda x: x.label()=='P')):
+    for vp in list(cs.subtrees(filter=lambda x: x.label() == 'P')):
         test.append(" ".join([i[0] for i in vp.leaves() if len(vp.leaves()) >= 2]))
 
     # Search the words ['expérience', 'professionnelle', 'stage', 'stagiaire', 'internship', 'intern', 'experience', 'professional experience'] in the chunk and then print out the text after it
 
-    experience_keywords = ['expérience', 'professionnelle', 'stage', 'stagiaire', 'internship', 'intern', 'experience', 'professional experience']
+    experience_keywords = ['expérience', 'professionnelle', 'stage', 'stagiaire', 'internship', 'intern', 'experience',
+                           'professional experience']
     x = []
     for i in test:
         if any(word in i.lower() for word in experience_keywords):
@@ -272,70 +257,6 @@ def extract_experience(resume_text):
     x.extend(y)
 
     return x
-
-# def extract_experience(doc):
-#     """
-#     Helper function to extract experience from resume text
-#
-#     :param doc: Plain resume text
-#     :return: list of experience
-#     """
-#
-#     experience_sections = []
-#     current_section = []
-#     experience_keywords = ["Expérience Professionnelle", "Projets Académiques", "Stage", "Développeur", "Consultant", "Ingénieur", "Internship", "Intern", "Experience", "Projects", "Projets", "Professional Experience"]
-#     date_pattern = re.compile(r'\b(?:\d{4})\b')
-#
-#     # Flag to indicate if we are in an experience section
-#     in_experience_section = False
-#
-#     for token in doc:
-#         if any(keyword in token.text for keyword in experience_keywords):
-#             in_experience_section = True
-#
-#         if in_experience_section:
-#             if date_pattern.search(token.text) or any(keyword in token.text for keyword in experience_keywords):
-#                 current_section.append(token.text)
-#             else:
-#                 if current_section:
-#                     experience_sections.append(" ".join(current_section))
-#                     current_section = []
-#                 in_experience_section = False
-#
-#     if current_section:
-#         experience_sections.append(" ".join(current_section))
-#
-#     # Further process each section to extract job details
-#     experience_details = []
-#     job_title_keywords = ["Développeur", "Consultant", "Stage"]
-#
-#     for section in experience_sections:
-#         lines = section.split('\n')
-#         current_experience = {}
-#
-#         for line in lines:
-#             # Find job titles
-#             for keyword in job_title_keywords:
-#                 if keyword in line:
-#                     current_experience['job_title'] = line.strip()
-#
-#             # Find company names and dates
-#             if 'Entreprise' in line or 'Poste' in line:
-#                 parts = line.split(':')
-#                 if 'Entreprise' in line:
-#                     current_experience['company'] = parts[1].strip()
-#                 if 'Poste' in line:
-#                     current_experience['position'] = parts[1].strip()
-#             else:
-#                 dates = date_pattern.findall(line)
-#                 if dates:
-#                     current_experience['dates'] = dates
-#
-#         if current_experience:
-#             experience_details.append(current_experience)
-#
-#     print(experience_details)
-#     return experience_details
 
 
 def extract_competencies(text, experience_list):
@@ -355,8 +276,9 @@ def extract_competencies(text, experience_list):
                     competency_dict[competency] = [item]
                 else:
                     competency_dict[competency].append(item)
-    
+
     return competency_dict
+
 
 def extract_measurable_results(text, experience_list):
     '''
@@ -377,8 +299,9 @@ def extract_measurable_results(text, experience_list):
                     mr_dict[mr] = [item]
                 else:
                     mr_dict[mr].append(item)
-    
+
     return mr_dict
+
 
 def string_found(string1, string2):
     if re.search(r"\b" + re.escape(string1) + r"\b", string2):
