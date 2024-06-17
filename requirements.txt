@@ -1,0 +1,6 @@
+setuptools~=68.2.0
+docx2txt~=0.8
+nltk~=3.8.1
+pandas~=2.2.2
+pdfminer~=20191125
+spacy==2.3.5
