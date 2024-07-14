@@ -1,6 +1,7 @@
 import io
 import os
 import re
+from typing import Optional, List, Dict
 
 import docx2txt
 import nltk
@@ -9,77 +10,70 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
-from pdfminer.pdfinterp import PDFPageInterpreter
-from pdfminer.pdfinterp import PDFResourceManager
+from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
+from spacy.tokens import Doc
 
 from . import constants as cs
 from .constants import *
 
-
-def extract_text_from_pdf(pdf_path):
-    '''
+def extract_text_from_pdf(pdf_path: str) -> str:
+    """
     Helper function to extract the plain text from .pdf files
 
     :param pdf_path: path to PDF file to be extracted
-    :return: iterator of string of extracted text
-    '''
-    # https://www.blog.pythonlibrary.org/2018/05/03/exporting-data-from-pdfs-with-python/
+    :return: string of extracted text
+    """
     with open(pdf_path, 'rb') as fh:
-        for page in PDFPage.get_pages(fh,
-                                      caching=True,
-                                      check_extractable=True):
+        text = ""
+        for page in PDFPage.get_pages(fh, caching=True, check_extractable=True):
             resource_manager = PDFResourceManager()
             fake_file_handle = io.StringIO()
             converter = TextConverter(resource_manager, fake_file_handle, codec='utf-8', laparams=LAParams())
             page_interpreter = PDFPageInterpreter(resource_manager, converter)
             page_interpreter.process_page(page)
 
-            text = fake_file_handle.getvalue()
-            yield text
+            text += fake_file_handle.getvalue()
 
-            # close open handles
             converter.close()
             fake_file_handle.close()
+        return text
 
-
-def extract_text_from_doc(doc_path):
-    '''
+def extract_text_from_doc(doc_path: str) -> str:
+    """
     Helper function to extract plain text from .doc or .docx files
 
     :param doc_path: path to .doc or .docx file to be extracted
     :return: string of extracted text
-    '''
+    """
     temp = docx2txt.process(doc_path)
     text = [line.replace('\t', ' ') for line in temp.split('\n') if line]
     return ' '.join(text)
 
-
-def extract_text(file_path, extension):
-    '''
+def extract_text(file_path: str) -> str:
+    """
     Wrapper function to detect the file extension and call text extraction function accordingly
 
     :param file_path: path of file of which text is to be extracted
-    :param extension: extension of file `file_name`
-    '''
-    text = ''
+    :return: string of extracted text
+    """
+    extension = os.path.splitext(file_path)[1].lower()
     if extension == '.pdf':
-        for page in extract_text_from_pdf(file_path):
-            text += ' ' + page
-    elif extension == '.docx' or extension == '.doc':
-        text = extract_text_from_doc(file_path)
-    return text
+        return extract_text_from_pdf(file_path)
+    elif extension in ['.docx', '.doc']:
+        return extract_text_from_doc(file_path)
+    else:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
 
-
-def extract_entity_sections(text):
-    '''
+def extract_entity_sections(text: str) -> Dict[str, List[str]]:
+    """
     Helper function to extract all the raw text from sections of resume
 
     :param text: Raw text of resume
     :return: dictionary of entities
-    '''
+    """
     text_split = [i.strip() for i in text.split('\n')]
-    # sections_in_resume = [i for i in text_split if i.lower() in sections]
     entities = {}
     key = False
     for phrase in text_split:
@@ -96,87 +90,61 @@ def extract_entity_sections(text):
             key = p_key
         elif key and phrase.strip():
             entities[key].append(phrase)
-
-    # entity_key = False
-    # for entity in entities.keys():
-    #     sub_entities = {}
-    #     for entry in entities[entity]:
-    #         if u'\u2022' not in entry:
-    #             sub_entities[entry] = []
-    #             entity_key = entry
-    #         elif entity_key:
-    #             sub_entities[entity_key].append(entry)
-    #     entities[entity] = sub_entities
-
-    # pprint.pprint(entities)
-
-    # make entities that are not found None
-    # for entity in cs.RESUME_SECTIONS:
-    #     if entity not in entities.keys():
-    #         entities[entity] = None
     return entities
 
-
-def extract_email(text):
-    '''
+def extract_email(text: str) -> Optional[str]:
+    """
     Helper function to extract email id from text
 
     :param text: plain text extracted from resume file
-    '''
-    email = re.findall("([^@|\s]+@[^@]+\.[^@|\s]+)", text)
+    :return: email id if found, else None
+    """
+    email = re.findall(r"([^@|\s]+@[^@]+\.[^@|\s]+)", text)
     if email:
         try:
             return email[0].split()[0].strip(';')
         except IndexError:
             return None
+    return None
 
-
-def extract_name(nlp_text, matcher):
-    '''
+def extract_name(nlp_text: Doc, matcher) -> Optional[str]:
+    """
     Helper function to extract name from spacy nlp text
 
     :param nlp_text: object of `spacy.tokens.doc.Doc`
     :param matcher: object of `spacy.matcher.Matcher`
     :return: string of full name
-    '''
+    """
     pattern = [cs.NAME_PATTERN]
-
     matcher.add('NAME', None, *pattern)
-
     matches = matcher(nlp_text)
-
-    for match_id, start, end in matches:
+    for _, start, end in matches:
         span = nlp_text[start:end]
         return span.text
+    return None
 
-
-def extract_mobile_number(text):
-    '''
+def extract_mobile_number(text: str) -> Optional[str]:
+    """
     Helper function to extract mobile number from text
 
     :param text: plain text extracted from resume file
     :return: string of extracted mobile numbers
-    '''
-    # Found this complicated regex on : https://zapier.com/blog/extract-links-email-phone-regex/
-    phone = re.findall(re.compile(r'(?:(?:\+?([1-9]|[0-9][0-9]|[0-9][0-9][0-9])\s*(?:[.-]\s*)?)?(?:\(\s*([2-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9])\s*\)|([0-9][1-9]|[0-9]1[02-9]|[2-9][02-8]1|[2-9][02-8][02-9]))\s*(?:[.-]\s*)?)?([2-9]1[02-9]|[2-9][02-9]1|[2-9][02-9]{2})\s*(?:[.-]\s*)?([0-9]{4})(?:\s*(?:#|x\.?|ext\.?|extension)\s*(\d+))?'), text)
-    # mob_num_regex = r'^(\+212|0)([\s.-]?)(6|7)([\s.-]?\d{2}){4}$'
-    # phone = re.findall(re.compile(mob_num_regex), text)
-    if phone:
-        number = ''.join(phone[0])
-        if len(number) > 10:
-            return '+' + number
-        else:
-            return number
+    """
+    # Moroccan phone number pattern
+    pattern = r"(\+212|0)([ \-_/]*)(\d[ \-_/]*){9}"
+    match = re.search(pattern, text)
+    if match:
+        return match.group().replace(" ", "").replace("-", "").replace("_", "").replace("/", "")
+    return None
 
-
-def extract_skills(nlp_text, noun_chunks):
-    '''
+def extract_skills(nlp_text: Doc, noun_chunks: List) -> List[str]:
+    """
     Helper function to extract skills from spacy nlp text
 
     :param nlp_text: object of `spacy.tokens.doc.Doc`
     :param noun_chunks: noun chunks extracted from nlp text
     :return: list of skills extracted
-    '''
+    """
     tokens = [token.text for token in nlp_text if not token.is_stop]
     data = pd.read_csv(os.path.join(os.path.dirname(__file__), 'skills.csv'))
     skills = list(data.columns.values)
@@ -185,7 +153,6 @@ def extract_skills(nlp_text, noun_chunks):
     for token in tokens:
         if token.lower() in skills:
             skillset.append(token)
-
     # check for bi-grams and tri-grams
     for token in noun_chunks:
         token = token.text.lower().strip()
@@ -193,79 +160,69 @@ def extract_skills(nlp_text, noun_chunks):
             skillset.append(token)
     return [i.capitalize() for i in set([i.lower() for i in skillset])]
 
-
-def cleanup(token, lower=True):
+def cleanup(token: str, lower: bool = True) -> str:
     if lower:
         token = token.lower()
     return token.strip()
 
+def extract_education(nlp_text: List[str]) -> List[str]:
+    """
+    Helper function to extract education from spacy nlp text
 
-def extract_education_keywords(nlp_text):
+    :param nlp_text: object of `spacy.tokens.doc.Doc`
+    :return: list of education
+    """
     edu_keywords = []
     combined_text = ' '.join(nlp_text)
-
     for word in combined_text.split():
         cleaned_word = re.sub(r'[?|$|.|!|,]', r'', word)
         if cleaned_word.upper() in (kw.upper() for kw in EDUCATION):
-            edu_keywords.append(cleaned_word.upper())
+            edu_keywords.append(cleaned_word)
+    return list(set(edu_keywords))
 
-    return edu_keywords
-
-
-def extract_experience(resume_text):
-    '''
+def extract_experience(resume_text: str) -> List[str]:
+    """
     Helper function to extract experience from resume text
 
     :param resume_text: Plain resume text
     :return: list of experience
-    '''
+    """
     wordnet_lemmatizer = WordNetLemmatizer()
-    stop_words = set(stopwords.words('english') + stopwords.words('french'))
+    stop_words = set(stopwords.words('french'))
 
     # word tokenization
     word_tokens = nltk.word_tokenize(resume_text)
 
     # remove stop words and lemmatize
-    filtered_sentence = [w for w in word_tokens if
-                         not w in stop_words and wordnet_lemmatizer.lemmatize(w) not in stop_words]
+    filtered_sentence = [w for w in word_tokens if w.lower() not in stop_words and wordnet_lemmatizer.lemmatize(w) not in stop_words]
     sent = nltk.pos_tag(filtered_sentence)
 
     # parse regex
     cp = nltk.RegexpParser('P: {<NNP>+}')
     cs = cp.parse(sent)
 
-    # for i in cs.subtrees(filter=lambda x: x.label() == 'P'):
-    #     print(i)
-
     test = []
 
     for vp in list(cs.subtrees(filter=lambda x: x.label() == 'P')):
         test.append(" ".join([i[0] for i in vp.leaves() if len(vp.leaves()) >= 2]))
 
-    # Search the words ['expérience', 'professionnelle', 'stage', 'stagiaire', 'internship', 'intern', 'experience', 'professional experience'] in the chunk and then print out the text after it
-
+    # Search for experience keywords
     experience_keywords = ['expérience', 'professionnelle', 'stage', 'stagiaire', 'internship', 'intern', 'experience',
-                           'professional experience']
-    x = []
-    for i in test:
-        if any(word in i.lower() for word in experience_keywords):
-            x.append(i)
+                           'professional experience', 'projet', 'pfe', 'pfa']
+    x = [i for i in test if any(word in i.lower() for word in experience_keywords)]
 
-    # Search the word 'experience' in the chunk and then print out the text after it
-    y = [y[y.lower().index('experience') + 10:] for j, y in enumerate(test) if y and 'experience' in y.lower()]
+    y = [y[y.lower().index('experience') + 10:] for y in test if 'experience' in y.lower()]
 
-    x.extend(y)
+    return x + y
 
-    return x
-
-
-def extract_competencies(text, experience_list):
-    '''
+def extract_competencies(text: str, experience_list: List[str]) -> Dict[str, List[str]]:
+    """
     Helper function to extract competencies from resume text
 
-    :param resume_text: Plain resume text
+    :param text: Plain resume text
+    :param experience_list: list of experience items
     :return: dictionary of competencies
-    '''
+    """
     experience_text = ' '.join(experience_list)
     competency_dict = {}
 
@@ -276,19 +233,16 @@ def extract_competencies(text, experience_list):
                     competency_dict[competency] = [item]
                 else:
                     competency_dict[competency].append(item)
-
     return competency_dict
 
-
-def extract_measurable_results(text, experience_list):
-    '''
+def extract_measurable_results(text: str, experience_list: List[str]) -> Dict[str, List[str]]:
+    """
     Helper function to extract measurable results from resume text
 
-    :param resume_text: Plain resume text
+    :param text: Plain resume text
+    :param experience_list: list of experience items
     :return: dictionary of measurable results
-    '''
-
-    # we scan for measurable results only in first half of each sentence
+    """
     experience_text = ' '.join([text[:len(text) // 2 - 1] for text in experience_list])
     mr_dict = {}
 
@@ -299,11 +253,9 @@ def extract_measurable_results(text, experience_list):
                     mr_dict[mr] = [item]
                 else:
                     mr_dict[mr].append(item)
-
     return mr_dict
 
-
-def string_found(string1, string2):
+def string_found(string1: str, string2: str) -> bool:
     if re.search(r"\b" + re.escape(string1) + r"\b", string2):
         return True
     return False

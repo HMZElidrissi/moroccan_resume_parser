@@ -9,7 +9,7 @@ Moroccan Resume Parser is a customized tool for parsing resumes specifically tai
 - Customized to recognize Moroccan-specific education titles and job roles.
 - Uses `spacy` for natural language processing and matching.
 
-## Installation
+## Installation and Usage
 
 1. Clone the repository:
     ```bash
@@ -20,43 +20,43 @@ Moroccan Resume Parser is a customized tool for parsing resumes specifically tai
     ```bash
     cd moroccan_resume_parser
     ```
+   
+3. Set up the environment:
+   First, ensure you have Python 3.7+ installed on your system. Then, create a virtual environment and activate it:
+
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    ```
 
 3. Install the required dependencies:
     ```bash
     pip install -r requirements.txt
     ```
-
-## Usage
-
-1. Place resumes to be parsed in a directory named `resumes` within the project directory.
-
-2. Run the parser:
+   
+4. Download necessary NLTK data:
     ```bash
-    python resume_parser.py
+    python -m nltk.downloader stopwords
+    python -m nltk.downloader punkt
+    python -m nltk.downloader averaged_perceptron_tagger
+    python -m nltk.downloader maxent_ne_chunker
+    python -m nltk.downloader words
     ```
 
-3. The parsed data will be printed to the console.
+5. Download the French spaCy model:
+    ```bash
+    python -m spacy download fr_core_news_lg
+    ```
+   
+6. Prepare your resume files:
+   Place the resume files (PDF, DOCX, or TXT) you want to parse in a directory named 'resumes' in your project root.
 
-## Customization
+7. Run the parser:
+    ```bash
+    python main.py
+    ```
+   The parsed data will be saved in a json file named `parsed_resumes.json` in the project root.
 
-### Adding New Education Titles
-
-To add new education titles specific to Morocco, modify the `EDUCATION` list in the `constants.py` file:
-```python
-EDUCATION = [
-    'Bac', 'Baccalauréat', 'Licence', 'Master', 'Doctorat', 'Master', 'LST',
-    'niveau bac', 'Diplôme d\'ingénieur', 'Bachelor', 'PhD', 'Doctorat',
-    'Ingénieur', 'Cycle', 'Ingénierie', 'DEUG', 'DUT', 'BTS', 'BAC', 'Licencié',
-    'BAC+2', 'Ingénieur d\'état', 'BAC+3', 'BAC+4', 'BAC+5', 'DEUST', 'M1', 'M2'
-]
-```
-
-### Adding New Job Titles
-
-To add new job titles specific to Morocco, modify the `JOB_TITLE` list in the `constants.py` file:
-```python
-JOB_TITLE = ["Développeur", "stage", "PFE", "PFA", "Consultant", "Ingénieur", "stagiaire", "internship", "intern"]
-```
 
 ## Built On
 
